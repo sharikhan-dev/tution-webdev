@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "StudyMaterial": {
+      "title": "StudyMaterial",
+      "description": "Educational study materials, lecture notes, DPPs, and assignments hosted on Google Drive",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Material Title"
+        },
+        "subject": {
+          "type": "string",
+          "description": "Subject name, e.g., Physics, Chemistry, Mathematics"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of the study material"
+        },
+        "classSemester": {
+          "type": "string",
+          "description": "Class or semester, e.g., Class 12, Class 11, Class 10"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of study material, e.g., PDF Notes, Assignment, DPP, Formula Sheet"
+        },
+        "driveUrl": {
+          "type": "string",
+          "description": "Google Drive URL to access the material"
+        },
+        "date": {
+          "type": "string",
+          "description": "Material publish/creation date in YYYY-MM-DD format"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["title", "subject", "classSemester", "category", "driveUrl", "date"]
+    }
+  },
+  "firestore": {
+    "study_materials": {
+      "entity": "StudyMaterial",
+      "description": "Collection of all study materials hosted on Google Drive"
+    }
+  }
+}

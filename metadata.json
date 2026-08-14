@@ -1,0 +1,6 @@
+{
+  "name": "Apex Tuition Institute - Offline Tuition Management & Student Portal",
+  "description": "Comprehensive offline tuition coaching management platform featuring marketing website, admission CRM, secure enquiry communication, student portal, attendance, fee receipt PDF generation, test marks, and study material repository.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
