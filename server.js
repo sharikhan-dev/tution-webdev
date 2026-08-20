@@ -2,6 +2,9 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -145,8 +148,55 @@ const initialDatabase = {
   fee_payments: []
 };
 
+const firebaseConfigPath = path.join(__dirname, 'firebase-applet-config.json');
+let firebaseConfig = {};
+try {
+  if (fs.existsSync(firebaseConfigPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+  }
+} catch (err) {
+  console.error('Error reading firebase-applet-config.json:', err);
+}
+
+let dbInstance = null;
+if (firebaseConfig.projectId) {
+  try {
+    const firebaseApp = initializeApp(firebaseConfig);
+    dbInstance = getFirestore(firebaseApp);
+    console.log(`🔥 Firebase Firestore backend initialized for project: ${firebaseConfig.projectId}`);
+    
+    // Authenticate backend client anonymously to satisfy security rules
+    const authInstance = getAuth(firebaseApp);
+    signInAnonymously(authInstance)
+      .then(() => console.log('👤 Backend authenticated anonymously with Firebase'))
+      .catch(err => console.warn('Backend anonymous auth failed (continuing as unauthenticated):', err.message));
+  } catch (err) {
+    console.error('Failed to initialize Firebase Firestore in server.js:', err);
+  }
+} else {
+  console.log('⚠️ Firebase Config is missing or incomplete; backend operating in local-only mode.');
+}
+
 // Helper: load DB
-const loadDB = () => {
+const loadDB = async () => {
+  if (dbInstance) {
+    try {
+      const docRef = doc(dbInstance, 'apex_coaching', 'db');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        console.log('Successfully loaded database from Firestore');
+        return data;
+      } else {
+        console.log('No database document in Firestore. Seeding with initial database.');
+        await setDoc(docRef, initialDatabase);
+        return initialDatabase;
+      }
+    } catch (err) {
+      console.error('Error reading from Firestore, falling back to local file:', err);
+    }
+  }
+
   try {
     if (!fs.existsSync(DATA_FILE)) {
       fs.writeFileSync(DATA_FILE, JSON.stringify(initialDatabase, null, 2));
@@ -161,7 +211,18 @@ const loadDB = () => {
 };
 
 // Helper: save DB
-const saveDB = (data) => {
+const saveDB = async (data) => {
+  if (dbInstance) {
+    try {
+      const docRef = doc(dbInstance, 'apex_coaching', 'db');
+      await setDoc(docRef, data);
+      console.log('Successfully saved database to Firestore');
+      return;
+    } catch (err) {
+      console.error('Error writing to Firestore, falling back to local file:', err);
+    }
+  }
+
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
   } catch (err) {
@@ -180,78 +241,115 @@ app.get('/api/health', (req, res) => {
     server: 'Apex Coaching Academy Express Backend API',
     timestamp: new Date().toISOString(),
     dbPath: DATA_FILE,
+    firebaseConnected: !!dbInstance,
   });
 });
 
 // Get Snapshot of All Data
-app.get('/api/all', (req, res) => {
-  const db = loadDB();
-  res.json(db);
+app.get('/api/all', async (req, res) => {
+  try {
+    const db = await loadDB();
+    res.json(db);
+  } catch (err) {
+    console.error('GET /api/all failed:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Full Sync Endpoint
-app.post('/api/sync', (req, res) => {
+app.post('/api/sync', async (req, res) => {
   try {
     const payload = req.body;
-    const db = loadDB();
+    const db = await loadDB();
     const updated = { ...db, ...payload, updatedAt: new Date().toISOString() };
-    saveDB(updated);
+    await saveDB(updated);
     res.json({ success: true, message: 'Backend data successfully synchronized.', timestamp: new Date().toISOString() });
   } catch (err) {
+    console.error("Database save failed:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // Settings Endpoints
-app.get('/api/settings', (req, res) => {
-  const db = loadDB();
-  res.json(db.settings || {});
+app.get('/api/settings', async (req, res) => {
+  try {
+    const db = await loadDB();
+    res.json(db.settings || {});
+  } catch (err) {
+    console.error('GET /api/settings failed:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put('/api/settings', (req, res) => {
-  const db = loadDB();
-  db.settings = { ...db.settings, ...req.body };
-  saveDB(db);
-  res.json(db.settings);
+app.put('/api/settings', async (req, res) => {
+  try {
+    const db = await loadDB();
+    db.settings = { ...db.settings, ...req.body };
+    await saveDB(db);
+    res.json(db.settings);
+  } catch (err) {
+    console.error('PUT /api/settings failed:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Generic Collection CRUD Handlers
 const createCrudRoutes = (collectionName) => {
-  app.get(`/api/${collectionName}`, (req, res) => {
-    const db = loadDB();
-    res.json(db[collectionName] || []);
-  });
-
-  app.post(`/api/${collectionName}`, (req, res) => {
-    const db = loadDB();
-    const items = db[collectionName] || [];
-    const newItem = { id: req.body.id || `${collectionName.slice(0, 3)}-${Date.now()}`, ...req.body, createdAt: new Date().toISOString() };
-    items.unshift(newItem);
-    db[collectionName] = items;
-    saveDB(db);
-    res.status(201).json(newItem);
-  });
-
-  app.put(`/api/${collectionName}/:id`, (req, res) => {
-    const db = loadDB();
-    const items = db[collectionName] || [];
-    const index = items.findIndex((i) => i.id === req.params.id);
-    if (index === -1) {
-      return res.status(404).json({ error: 'Item not found' });
+  app.get(`/api/${collectionName}`, async (req, res) => {
+    try {
+      const db = await loadDB();
+      res.json(db[collectionName] || []);
+    } catch (err) {
+      console.error(`GET /api/${collectionName} failed:`, err);
+      res.status(500).json({ error: err.message });
     }
-    items[index] = { ...items[index], ...req.body, updatedAt: new Date().toISOString() };
-    db[collectionName] = items;
-    saveDB(db);
-    res.json(items[index]);
   });
 
-  app.delete(`/api/${collectionName}/:id`, (req, res) => {
-    const db = loadDB();
-    let items = db[collectionName] || [];
-    items = items.filter((i) => i.id !== req.params.id);
-    db[collectionName] = items;
-    saveDB(db);
-    res.json({ success: true, id: req.params.id });
+  app.post(`/api/${collectionName}`, async (req, res) => {
+    try {
+      const db = await loadDB();
+      const items = db[collectionName] || [];
+      const newItem = { id: req.body.id || `${collectionName.slice(0, 3)}-${Date.now()}`, ...req.body, createdAt: new Date().toISOString() };
+      items.unshift(newItem);
+      db[collectionName] = items;
+      await saveDB(db);
+      res.status(201).json(newItem);
+    } catch (err) {
+      console.error(`POST /api/${collectionName} failed:`, err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put(`/api/${collectionName}/:id`, async (req, res) => {
+    try {
+      const db = await loadDB();
+      const items = db[collectionName] || [];
+      const index = items.findIndex((i) => i.id === req.params.id);
+      if (index === -1) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+      items[index] = { ...items[index], ...req.body, updatedAt: new Date().toISOString() };
+      db[collectionName] = items;
+      await saveDB(db);
+      res.json(items[index]);
+    } catch (err) {
+      console.error(`PUT /api/${collectionName}/${req.params.id} failed:`, err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete(`/api/${collectionName}/:id`, async (req, res) => {
+    try {
+      const db = await loadDB();
+      let items = db[collectionName] || [];
+      items = items.filter((i) => i.id !== req.params.id);
+      db[collectionName] = items;
+      await saveDB(db);
+      res.json({ success: true, id: req.params.id });
+    } catch (err) {
+      console.error(`DELETE /api/${collectionName}/${req.params.id} failed:`, err);
+      res.status(500).json({ error: err.message });
+    }
   });
 };
 
@@ -259,20 +357,30 @@ const createCrudRoutes = (collectionName) => {
 ['courses', 'teachers', 'batches', 'students', 'enquiries', 'study_materials', 'tests', 'test_results', 'notices', 'attendance', 'fee_payments'].forEach(createCrudRoutes);
 
 // Enquiry Messages Specific Endpoint
-app.get('/api/enquiry-messages/:enquiryId', (req, res) => {
-  const db = loadDB();
-  const messages = (db.enquiry_messages || []).filter(m => m.enquiryId === req.params.enquiryId);
-  res.json(messages);
+app.get('/api/enquiry-messages/:enquiryId', async (req, res) => {
+  try {
+    const db = await loadDB();
+    const messages = (db.enquiry_messages || []).filter(m => m.enquiryId === req.params.enquiryId);
+    res.json(messages);
+  } catch (err) {
+    console.error(`GET /api/enquiry-messages/${req.params.enquiryId} failed:`, err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/enquiry-messages', (req, res) => {
-  const db = loadDB();
-  const messages = db.enquiry_messages || [];
-  const newMsg = { id: `msg-${Date.now()}`, ...req.body, timestamp: new Date().toISOString() };
-  messages.push(newMsg);
-  db.enquiry_messages = messages;
-  saveDB(db);
-  res.status(201).json(newMsg);
+app.post('/api/enquiry-messages', async (req, res) => {
+  try {
+    const db = await loadDB();
+    const messages = db.enquiry_messages || [];
+    const newMsg = { id: `msg-${Date.now()}`, ...req.body, timestamp: new Date().toISOString() };
+    messages.push(newMsg);
+    db.enquiry_messages = messages;
+    await saveDB(db);
+    res.status(201).json(newMsg);
+  } catch (err) {
+    console.error('POST /api/enquiry-messages failed:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Serve frontend static files if built

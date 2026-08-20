@@ -17,8 +17,19 @@ import {
 import { getAuth, signInAnonymously, onAuthStateChanged, Auth } from 'firebase/auth';
 import { getMessaging, getToken, onMessage, isSupported, Messaging } from 'firebase/messaging';
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadString, FirebaseStorage } from 'firebase/storage';
-import firebaseConfig from '../../firebase-applet-config.json';
+import localFirebaseConfig from '../../firebase-applet-config.json';
 import { StudyMaterial, Course, Batch, Teacher, Student, Enquiry, Notice, Test } from '../types';
+
+const env = (import.meta as any).env || {};
+export const firebaseConfig = {
+  apiKey: env.VITE_FIREBASE_API_KEY || localFirebaseConfig.apiKey,
+  authDomain: env.VITE_FIREBASE_PROJECT_ID ? `${env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com` : localFirebaseConfig.authDomain,
+  projectId: env.VITE_FIREBASE_PROJECT_ID || localFirebaseConfig.projectId,
+  storageBucket: env.VITE_FIREBASE_PROJECT_ID ? `${env.VITE_FIREBASE_PROJECT_ID}.appspot.com` : localFirebaseConfig.storageBucket,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || localFirebaseConfig.messagingSenderId,
+  appId: env.VITE_FIREBASE_APP_ID || localFirebaseConfig.appId,
+  firestoreDatabaseId: env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || (localFirebaseConfig as any).firestoreDatabaseId,
+};
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();

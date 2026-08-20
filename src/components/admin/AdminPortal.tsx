@@ -3,8 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { storage } from '../../services/storage';
 import { generateFeeReceiptPdf } from '../../utils/pdfGenerator';
 import { NotificationDropdown } from '../common/NotificationDropdown';
-import { firebaseStudyMaterialService, firebaseCloudStorage, initFCM, db, auth } from '../../services/firebase';
-import firebaseConfig from '../../../firebase-applet-config.json';
+import { firebaseStudyMaterialService, firebaseCloudStorage, initFCM, db, auth, firebaseConfig } from '../../services/firebase';
 import confetti from 'canvas-confetti';
 import { 
   Enquiry, 

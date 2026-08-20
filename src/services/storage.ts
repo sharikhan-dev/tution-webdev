@@ -957,6 +957,13 @@ class StorageService {
     try {
       localStorage.setItem(key, JSON.stringify(value));
       window.dispatchEvent(new CustomEvent('apex_data_changed', { detail: { key } }));
+      
+      // Auto-sync with backend database if it is not a temporary/local-only key
+      if (key !== 'apex_push_token_v1' && key !== 'apex_notifications_v1') {
+        import('./api').then(({ apiService }) => {
+          apiService.syncWithBackend().catch(err => console.error('Background sync failed:', err));
+        }).catch(err => console.error('Failed to import apiService for auto-sync:', err));
+      }
     } catch (e) {
       console.error('Storage setItem error:', e);
     }

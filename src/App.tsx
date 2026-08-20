@@ -18,6 +18,7 @@ import { EnquiryChatRoom } from './components/enquiry/EnquiryChatRoom';
 import { StudentPortal } from './components/student/StudentPortal';
 import { AdminPortal } from './components/admin/AdminPortal';
 import { BackendModal } from './components/common/BackendModal';
+import { DemoRoleBar } from './components/common/DemoRoleBar';
 import { WebsiteSettings, Course, Batch, Teacher, Notice } from './types';
 
 const MainApp: React.FC = () => {
@@ -73,6 +74,22 @@ const MainApp: React.FC = () => {
 
   useEffect(() => {
     refreshData();
+
+    // Dynamically load latest data from backend Express API on mount
+    import('./services/api').then(async ({ apiService }) => {
+      try {
+        const status = await apiService.checkBackendHealth();
+        if (status.isConnected) {
+          console.log('Express API backend online. Initializing data load...');
+          await apiService.loadDataFromBackend();
+        } else {
+          console.log('Express API backend offline. Using local cached storage.');
+        }
+      } catch (err) {
+        console.warn('Backend data initialization failed, using local fallback:', err);
+      }
+    });
+
     const handleDataChanged = () => refreshData();
     window.addEventListener('apex_data_changed', handleDataChanged);
     return () => window.removeEventListener('apex_data_changed', handleDataChanged);
@@ -168,6 +185,21 @@ const MainApp: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans flex flex-col antialiased selection:bg-blue-600 selection:text-white">
+      <DemoRoleBar
+        currentView={currentView}
+        onSelectView={(view, code) => {
+          if (view === 'enquiry' && code) {
+            handleOpenEnquiryRoom(code);
+          } else {
+            setCurrentView(view);
+            if (view === 'admin') switchRoleDemo('admin');
+            if (view === 'student') switchRoleDemo('student');
+            if (view === 'marketing') switchRoleDemo('visitor');
+          }
+        }}
+        onOpenBackendModal={() => setBackendModalOpen(true)}
+      />
+
       {/* VIEW: MARKETING WEBSITE */}
       {currentView === 'marketing' && (
         <>

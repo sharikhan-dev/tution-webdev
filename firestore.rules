@@ -4,5 +4,8 @@ service cloud.firestore {
     match /study_materials/{materialId} {
       allow read, write: if true;
     }
+    match /apex_coaching/{document} {
+      allow read, write: if true;
+    }
   }
 }
