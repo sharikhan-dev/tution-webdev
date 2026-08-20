@@ -1732,7 +1732,14 @@ class StorageService {
 
   // WEBSITE SETTINGS
   getWebsiteSettings(): WebsiteSettings {
-    return this.getItem<WebsiteSettings>(STORAGE_KEYS.WEBSITE_SETTINGS, SEED_WEBSITE_SETTINGS);
+    const data = this.getItem<WebsiteSettings>(STORAGE_KEYS.WEBSITE_SETTINGS, SEED_WEBSITE_SETTINGS);
+    return {
+      ...SEED_WEBSITE_SETTINGS,
+      ...data,
+      results: data?.results || SEED_WEBSITE_SETTINGS.results,
+      testimonials: data?.testimonials || SEED_WEBSITE_SETTINGS.testimonials,
+      gallery: data?.gallery || SEED_WEBSITE_SETTINGS.gallery,
+    };
   }
 
   getSettings(): WebsiteSettings {
@@ -1853,7 +1860,11 @@ class StorageService {
 
   // SEO SETTINGS
   getSEOSettings(): SEOSettings {
-    return this.getItem<SEOSettings>(STORAGE_KEYS.SEO_SETTINGS, SEED_SEO_SETTINGS);
+    const data = this.getItem<SEOSettings>(STORAGE_KEYS.SEO_SETTINGS, SEED_SEO_SETTINGS);
+    return {
+      ...SEED_SEO_SETTINGS,
+      ...data,
+    };
   }
 
   updateSEOSettings(data: Partial<SEOSettings>): SEOSettings {
